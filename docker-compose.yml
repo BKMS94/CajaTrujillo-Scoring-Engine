@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  # El Cajero Rápido (Capa de Velocidad)
+  redis:
+    image: redis:alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    networks:
+      - cajatrujillo_net
+
+  # El Cerebro (Procesamiento)
+  spark:
+    image: bitnami/spark:3.5
+    container_name: spark_engine
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/opt/bitnami/spark/src
+      - ./data:/opt/bitnami/spark/data
+    networks:
+      - cajatrujillo_net
+
+networks:
+  cajatrujillo_net:
+    driver: bridge
