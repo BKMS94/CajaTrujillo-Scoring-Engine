@@ -1,29 +1,53 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, lit
 
-spark = SparkSession.builder.appName("ScoringEngine").getOrCreate()
+def run_scoring():
+    # Inicializar Spark
+    spark = SparkSession.builder \
+        .appName("CajaTrujillo_Scoring_Engine") \
+        .getOrCreate()
 
-# 1. Simulación de Ingesta (Capa Bronze)
-solicitudes_raw = [
-    ("CLI_001", 1200, 1), # Pide 1200, SBS Excelente
-    ("CLI_002", 1000, 3)  # Pide 1000, SBS Deficiente
-]
-df = spark.createDataFrame(solicitudes_raw, ["id_cliente", "monto_solicitado", "score_sbs"])
+    print("--- Motor de Scoring Iniciado ---")
 
-# 2. Lógica de Negocio (Capa Silver)
-# (Aquí simularíamos el join con Redis, pero usaremos valores fijos para el ejemplo)
-df_scoring = df.withColumn(
-    "limite_permitido",
-    when(col("score_sbs") == 1, 0.30).otherwise(0.20)
-)
+    # 1. Simulación de solicitudes entrantes (Capa Bronze)
+    # Formato: ID_Cliente, Monto_Pedido, Calificacion_SBS (1=Exc, 2=Normal, 3=Riesgo)
+    raw_data = [
+        ("CLI_001", 1200, 1), 
+        ("CLI_002", 900, 2),
+        ("CLI_003", 500, 3),
+        ("CLI_004", 3000, 1)
+    ]
+    
+    df_requests = spark.createDataFrame(raw_data, ["id_cliente", "monto_pedido", "sbs_score"])
 
-# 3. Decisión Final (Capa Gold)
-df_final = df_scoring.withColumn(
-    "decision",
-    when(col("monto_solicitado") <= (lit(5000) * col("limite_permitido")), "APROBADO")
-    .otherwise("RECHAZADO")
-)
+    # 2. Lógica de Enriquecimiento y Reglas de Negocio (Capa Silver)
+    # Aquí simulamos los sueldos que Spark "leerá" (en producción sería un Join con Redis)
+    df_enriched = df_requests.withColumn(
+        "sueldo_estimado",
+        when(col("id_cliente") == "CLI_001", 5000)
+        .when(col("id_cliente") == "CLI_002", 2800)
+        .when(col("id_cliente") == "CLI_003", 1500)
+        .otherwise(8000)
+    )
 
-# Guardar resultado en Gold (Parquet particionado)
-# df_final.write.partitionBy("decision").mode("overwrite").parquet("data/gold/scoring_results")
-df_final.show()
+    # 3. Aplicación de la Regla de Arquitecto:
+    # Si SBS = 1 (Excelente) -> Límite 30% del sueldo
+    # Si SBS > 1 -> Límite 20% del sueldo
+    df_final = df_enriched.withColumn(
+        "resultado",
+        when(
+            (col("sbs_score") == 1) & (col("monto_pedido") <= col("sueldo_estimado") * 0.30), "APROBADO"
+        ).when(
+            (col("sbs_score") > 1) & (col("monto_pedido") <= col("sueldo_estimado") * 0.20), "APROBADO"
+        ).otherwise("RECHAZADO")
+    )
+
+    # Mostrar resultados en consola
+    df_final.select("id_cliente", "monto_pedido", "sueldo_estimado", "resultado").show()
+
+    # Guardar en Capa Gold (Simulado)
+    print("Guardando resultados en data/gold/ en formato Parquet...")
+    # df_final.write.mode("overwrite").parquet("data/gold/scoring_results")
+
+if __name__ == "__main__":
+    run_scoring()
