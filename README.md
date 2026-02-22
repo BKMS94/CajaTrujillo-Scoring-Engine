@@ -43,7 +43,7 @@ La solución emplea un enfoque híbrido de procesamiento por lotes y tiempo real
 │   ├── silver/              # Datos transformados
 │   └── gold/                # Tablas finales particionadas
 └── README.md
-
+```
 ## ⚙️ Guía de Ejecución
 Siga estos pasos para desplegar el entorno local de pruebas:
 
